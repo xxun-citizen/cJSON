@@ -20,8 +20,11 @@
   THE SOFTWARE.
 */
 
+<<<<<<< HEAD
 //first commit
 
+=======
+>>>>>>> f10e780 (init: 初始化 cJSON 仓库，清空历史记录)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
