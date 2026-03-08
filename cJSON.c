@@ -871,6 +871,7 @@ static cJSON_bool parse_string(cJSON * const item, parse_buffer * const input_bu
             }
             input_end++;
         }
+        /* 如果到达缓冲末尾或者当前字符不是结束引号，则字符串无效 */
         if (((size_t)(input_end - input_buffer->content) >= input_buffer->length) || (*input_end != '\"'))
         {
             goto fail; /* string ended unexpectedly */
@@ -885,18 +886,22 @@ static cJSON_bool parse_string(cJSON * const item, parse_buffer * const input_bu
         }
     }
 
+    /* 准备输出指针，写入开始 */
     output_pointer = output;
-    /* loop through the string literal */
+    /* 遍历字符串字面量并处理每个字符 */
     while (input_pointer < input_end)
     {
+        /* 如果不是反斜杠，直接复制普通字符 */
         if (*input_pointer != '\\')
         {
             *output_pointer++ = *input_pointer++;
         }
-        /* escape sequence */
+        /* 否则处理转义序列 */
         else
         {
+            /* 默认跳过两个字符：反斜杠和后续编码 */
             unsigned char sequence_length = 2;
+            /* 若剩余长度不足以包含转义码，失败 */
             if ((input_end - input_pointer) < 1)
             {
                 goto fail;
@@ -904,13 +909,13 @@ static cJSON_bool parse_string(cJSON * const item, parse_buffer * const input_bu
 
             switch (input_pointer[1])
             {
-                case 'b':
+                case 'b': /* backspace (\b) */
                     *output_pointer++ = '\b';
                     break;
-                case 'f':
+                case 'f': /* formfeed (\f) */
                     *output_pointer++ = '\f';
                     break;
-                case 'n':
+                case 'n': /* newline (\n) */
                     *output_pointer++ = '\n';
                     break;
                 case 'r':
@@ -3211,4 +3216,24 @@ CJSON_PUBLIC(void) cJSON_free(void *object)
 {
     global_hooks.deallocate(object);
     object = NULL;
+}
+
+/*----------扩展功能函数编写实现----------*/
+
+//生成指定层级的缩进字符串，写入打印缓冲区
+static int print_indent_custom(printbuffer *buffer,const cJSON_PrintConfig*config,int depth)
+{
+    if (buffer ==NULL || config ==NULL || depth < 0) {
+        return 0;
+    }
+    
+    // 计算总缩进字符数：depth * indent_step
+    int indent_len = depth * config->indent_step;
+    for(int i=0;i< indent_len;i++) {
+        if(!buffer_add_char(buffer,config->indent_char[0])) { // 逐个添加缩进字符
+            return 0;
+        }
+
+    }
+    return 1;
 }
