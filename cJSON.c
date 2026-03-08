@@ -657,40 +657,50 @@ static cJSON_bool print_number(const cJSON * const item, printbuffer * const out
     return true;
 }
 
-/* parse 4 digit hexadecimal number */
+/*
+ * 解析4位十六进制数
+ * 该函数从输入的字符串中解析一个4位的十六进制数。
+ * 输入字符串应至少包含4个字符，每个字符为0-9、A-F或a-f。
+ * 返回解析出的无符号整数值，如果输入无效则返回0。
+ */
 static unsigned parse_hex4(const unsigned char * const input)
 {
-    unsigned int h = 0;
-    size_t i = 0;
+    unsigned int h = 0; // 用于累积解析结果的无符号整数
+    size_t i = 0; // 循环计数器
 
+    // 循环处理输入字符串中的4个十六进制字符
     for (i = 0; i < 4; i++)
     {
         /* parse digit */
+        // 检查字符是否为数字0-9
         if ((input[i] >= '0') && (input[i] <= '9'))
         {
-            h += (unsigned int) input[i] - '0';
+            h += (unsigned int) input[i] - '0'; // 转换为数字值并累加
         }
+        // 检查字符是否为大写字母A-F
         else if ((input[i] >= 'A') && (input[i] <= 'F'))
         {
-            h += (unsigned int) 10 + input[i] - 'A';
+            h += (unsigned int) 10 + input[i] - 'A'; // 转换为10-15并累加
         }
+        // 检查字符是否为小写字母a-f
         else if ((input[i] >= 'a') && (input[i] <= 'f'))
         {
-            h += (unsigned int) 10 + input[i] - 'a';
+            h += (unsigned int) 10 + input[i] - 'a'; // 转换为10-15并累加
         }
         else /* invalid */
         {
-            return 0;
+            return 0; // 如果字符无效，返回0表示解析失败
         }
 
+        // 如果不是最后一个字符，向左移位4位为下一个字符腾出空间
         if (i < 3)
         {
             /* shift left to make place for the next nibble */
-            h = h << 4;
+            h = h << 4; // 左移4位，相当于乘以16
         }
     }
 
-    return h;
+    return h; // 返回解析出的十六进制数值
 }
 
 /* converts a UTF-16 literal to UTF-8
@@ -815,29 +825,42 @@ fail:
     return 0;
 }
 
-/* Parse the input text into an unescaped cinput, and populate item. */
+/*
+ * 解析输入文本中的字符串常量，解除转义并将结果存入 item。
+ *
+ * 参数:
+ *   item           - 目标 cJSON 结构，解析后类型将设置为 cJSON_String。
+ *   input_buffer   - 包含待解析 JSON 文本和当前偏移的缓冲区。
+ *
+ * 成功返回 true；失败（格式错误或内存不足）返回 false。
+ */
 static cJSON_bool parse_string(cJSON * const item, parse_buffer * const input_buffer)
 {
+    /* 指向开头引号之后的当前输入字符 */
     const unsigned char *input_pointer = buffer_at_offset(input_buffer) + 1;
+    /* 用于查找结束引号的扫描指针，初始同 input_pointer */
     const unsigned char *input_end = buffer_at_offset(input_buffer) + 1;
+    /* 输出缓冲的写入位置 */
     unsigned char *output_pointer = NULL;
+    /* 分配给取消转义后字符串的缓冲起始地址 */
     unsigned char *output = NULL;
 
-    /* not a string */
+    /* 检查当前偏移处是否是双引号，非字符串则跳转失败 */
     if (buffer_at_offset(input_buffer)[0] != '\"')
     {
         goto fail;
     }
 
     {
-        /* calculate approximate size of the output (overestimate) */
+        /* 估算输出长度：未计算转义字符 */
         size_t allocation_length = 0;
-        size_t skipped_bytes = 0;
+        size_t skipped_bytes = 0; /* 转义序列中需要跳过的额外字符 */
         while (((size_t)(input_end - input_buffer->content) < input_buffer->length) && (*input_end != '\"'))
         {
-            /* is escape sequence */
+            /* 当前字符是否为反斜杠，开始转义序列 */
             if (input_end[0] == '\\')
             {
+                /* 如果反斜杠是最后一个字符，则后续无转义内容，视为不完整 */
                 if ((size_t)(input_end + 1 - input_buffer->content) >= input_buffer->length)
                 {
                     /* prevent buffer overflow when last input character is a backslash */
