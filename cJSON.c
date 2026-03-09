@@ -1820,120 +1820,169 @@ static cJSON_bool print_array(const cJSON * const item, printbuffer * const outp
 }
 
 /* Build an object from the text. */
+/* 从文本构建对象的函数，解析 JSON 对象并填充到 item 中 */
 static cJSON_bool parse_object(cJSON * const item, parse_buffer * const input_buffer)
 {
+    /* 初始化链表头指针 */
     cJSON *head = NULL; /* linked list head */
+    /* 初始化当前项指针 */
     cJSON *current_item = NULL;
 
+    /* 检查嵌套深度是否超过限制 */
     if (input_buffer->depth >= CJSON_NESTING_LIMIT)
     {
+        /* 如果超过，返回 false 表示嵌套过深 */
         return false; /* to deeply nested */
     }
+    /* 增加嵌套深度 */
     input_buffer->depth++;
 
+    /* 检查是否无法访问索引 0 或当前字符不是 '{' */
     if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '{'))
     {
+        /* 跳转到失败处理 */
         goto fail; /* not an object */
     }
 
+    /* 移动偏移量，跳过 '{' */
     input_buffer->offset++;
+    /* 跳过空白字符 */
     buffer_skip_whitespace(input_buffer);
+    /* 检查是否为空对象，即紧跟着 '}' */
     if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '}'))
     {
+        /* 跳转到成功处理 */
         goto success; /* empty object */
     }
 
+    /* 检查是否跳到了缓冲区末尾 */
     /* check if we skipped to the end of the buffer */
     if (cannot_access_at_index(input_buffer, 0))
     {
+        /* 回退偏移量 */
         input_buffer->offset--;
+        /* 跳转到失败处理 */
         goto fail;
     }
 
+    /* 回退偏移量到第一个元素前 */
     /* step back to character in front of the first element */
     input_buffer->offset--;
+    /* 循环遍历逗号分隔的数组元素 */
     /* loop through the comma separated array elements */
     do
     {
+        /* 分配新项 */
         /* allocate next item */
         cJSON *new_item = cJSON_New_Item(&(input_buffer->hooks));
+        /* 如果分配失败 */
         if (new_item == NULL)
         {
+            /* 跳转到失败处理 */
             goto fail; /* allocation failure */
         }
 
+        /* 将新项附加到链表 */
         /* attach next item to list */
         if (head == NULL)
         {
+            /* 开始链表 */
             /* start the linked list */
             current_item = head = new_item;
         }
         else
         {
+            /* 添加到末尾并前进 */
             /* add to the end and advance */
             current_item->next = new_item;
             new_item->prev = current_item;
             current_item = new_item;
         }
 
+        /* 检查是否无法访问索引 1，即逗号后无内容 */
         if (cannot_access_at_index(input_buffer, 1))
         {
+            /* 跳转到失败处理 */
             goto fail; /* nothing comes after the comma */
         }
 
+        /* 解析子项的名称 */
         /* parse the name of the child */
         input_buffer->offset++;
+        /* 跳过空白字符 */
         buffer_skip_whitespace(input_buffer);
+        /* 如果解析字符串失败 */
         if (!parse_string(current_item, input_buffer))
         {
+            /* 跳转到失败处理 */
             goto fail; /* failed to parse name */
         }
+        /* 跳过空白字符 */
         buffer_skip_whitespace(input_buffer);
 
+        /* 交换 valuestring 和 string，因为解析的是名称 */
         /* swap valuestring and string, because we parsed the name */
         current_item->string = current_item->valuestring;
         current_item->valuestring = NULL;
 
+        /* 检查是否无法访问索引 0 或当前字符不是 ':' */
         if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != ':'))
         {
+            /* 跳转到失败处理 */
             goto fail; /* invalid object */
         }
 
+        /* 解析值 */
         /* parse the value */
         input_buffer->offset++;
+        /* 跳过空白字符 */
         buffer_skip_whitespace(input_buffer);
+        /* 如果解析值失败 */
         if (!parse_value(current_item, input_buffer))
         {
+            /* 跳转到失败处理 */
             goto fail; /* failed to parse value */
         }
+        /* 跳过空白字符 */
         buffer_skip_whitespace(input_buffer);
     }
+    /* 循环条件：有逗号继续 */
     while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
 
+    /* 检查是否以 '}' 结束 */
     if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '}'))
     {
+        /* 跳转到失败处理 */
         goto fail; /* expected end of object */
     }
 
 success:
+    /* 减少嵌套深度 */
     input_buffer->depth--;
 
+    /* 如果头不为空，设置 prev 指针 */
     if (head != NULL) {
         head->prev = current_item;
     }
 
+    /* 设置 item 类型为对象 */
     item->type = cJSON_Object;
+    /* 设置子项为链表头 */
     item->child = head;
 
+    /* 移动偏移量，跳过 '}' */
     input_buffer->offset++;
+    /* 返回 true 表示解析成功 */
     return true;
 
 fail:
+    /* 如果头不为空，删除链表 */
     if (head != NULL)
     {
         cJSON_Delete(head);
     }
 
+    /* 返回 false 表示解析失败 */
     return false;
 }
 
