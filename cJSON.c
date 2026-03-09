@@ -3261,4 +3261,31 @@ static int print_newline_custom(printbuffer *buffer,const cJSON_PrintConfig *con
     }
     return 1;
 }
-    
+//计算对象键名最大宽度
+static int calculate_max_key_width(const cJSON * const object)
+{
+    //参数合法性测试：空指针或非对象节点，返回0
+    if (object == NULL || !cJSON_IsObject(object)) {
+        return 0;
+    }
+    //初始化最大宽度为0，遍历对象子节点，计算键名长度并更新最大宽度
+    int max_width = 0;
+    //指向对象的第一个子节点，开始遍历
+    const cJSON *child=object->child;
+    //循环遍历对象的所有键名，更新最大宽度
+    while(child!=NULL) {
+        //仅处理有键名的节点
+        if(child->string!=NULL) {
+            //计算当前键名的字符长度
+            int current_key_len=strlen(child->string);
+            //更新最大宽度
+            if(current_key_len>max_width) {
+                max_width=current_key_len;
+            }
+        }
+        //移动到下一个节点元素
+        child=child->next;
+    }
+    //返回最大宽度
+    return max_width;
+}
