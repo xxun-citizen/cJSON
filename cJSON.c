@@ -3237,3 +3237,28 @@ static int print_indent_custom(printbuffer *buffer,const cJSON_PrintConfig*confi
     }
     return 1;
 }
+//写入自定义换行符
+static int print_newline_custom(printbuffer *buffer,const cJSON_PrintConfig *config)
+{
+    if(buffer== NULL|| config ==NULL) {
+        return 0;
+    }
+    
+    //遍历换行符字符串，逐个添加到缓冲区
+    for(int i=0;config->newline_char[i]!='\0';i++) {
+        if(!buffer_add_char(buffer,config->newline_char[i])) {
+            return 0;
+        }
+    }
+
+    //如果开启空行，额外加一个换行
+    if(config->add_blank_line) {
+        for(int i=0;config->newline_char[i]!='\0';i++) {
+          if(!buffer_add_char(buffer,config->newline_char[i])) {
+              return 0;
+            }
+        }
+    }
+    return 1;
+}
+    
