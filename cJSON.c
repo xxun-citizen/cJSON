@@ -208,7 +208,7 @@ static unsigned char* cJSON_strdup(const unsigned char* string, const internal_h
 
 CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 {
-    if (hooks == NULL)
+    if (hooks == NULL)  //如果hooks为空，那么将使用默认的内存管理，然后返回.
     {
         /* Reset hooks */
         global_hooks.allocate = malloc;
@@ -216,20 +216,20 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
         global_hooks.reallocate = realloc;
         return;
     }
-
+    //也可以自定义内存管理函数
     global_hooks.allocate = malloc;
     if (hooks->malloc_fn != NULL)
     {
         global_hooks.allocate = hooks->malloc_fn;
     }
-
+    //如果自定义了内存分配函数，那么就必须提供一个对应的内存释放函数，否则会导致内存泄漏
     global_hooks.deallocate = free;
     if (hooks->free_fn != NULL)
     {
         global_hooks.deallocate = hooks->free_fn;
     }
 
-    /* use realloc only if both free and malloc are used */
+    
     global_hooks.reallocate = NULL;
     if ((global_hooks.allocate == malloc) && (global_hooks.deallocate == free))
     {
@@ -237,39 +237,49 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
     }
 }
 
-/* Internal constructor. */
+//初始化内存，返回了一个cJSON节点
 static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
 {
+    //定义一个node作为返回值，node指向一个新的cJSON节点.
     cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
+    //f语句，如果成功malloc出节点，则调用memset函数，将内存初始化为0，大小为cJSON结构体的大小.
     if (node)
     {
         memset(node, '\0', sizeof(cJSON));
     }
-
+    //返回node，返回类型是（cJSON*）型
     return node;
 }
 
-/* Delete a cJSON structure. */
+//删除一整个的JSON数据，同时将所有的节点全部释放内存.
 CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
 {
-    cJSON *next = NULL;
+    //传入一整个cJSON类型数据，指向指针item，item指向cJSON结构体的首地址.
+
+    cJSON *next = NULL; //定义一个cJSON类的next指针，用来递归删除整个JSON数据.
+
+    //如果当前的指针item指向的cJSON节点不为空，进入循环体进行删除操作
     while (item != NULL)
     {
+        //先定义next保存当前指针item的下一个指针指向位置，用来后面的递归遍历c=next
         next = item->next;
+        //如果传入的是cJSON结构，并且item->child，则调用cJSON_Delete函数删除嵌套的孩子链表
         if (!(item->type & cJSON_IsReference) && (item->child != NULL))
         {
             cJSON_Delete(item->child);
         }
-        if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+        //如果传入的是cJSON结构，并且item->valuestring，则调用全局内存管理函数global_hooks.deallocate函数删除字符串，并将item->valuestring置空
         {
             global_hooks.deallocate(item->valuestring);
             item->valuestring = NULL;
         }
+        //如果传入的是cJSON结构，并且item->string，则调用global_hooks.deallocate函数释放该节点内存
         if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
         {
             global_hooks.deallocate(item->string);
             item->string = NULL;
         }
+    
         global_hooks.deallocate(item);
         item = next;
     }
@@ -303,18 +313,19 @@ typedef struct
 /* get a pointer to the buffer at the position */
 #define buffer_at_offset(buffer) ((buffer)->content + (buffer)->offset)
 
-/* Parse the input text to generate a number, and populate the result into item. */
+//打印数字函数:
 static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_buffer)
 {
-    double number = 0;
-    unsigned char *after_end = NULL;
-    unsigned char *number_c_string;
-    unsigned char decimal_point = get_decimal_point();
-    size_t i = 0;
-    size_t number_string_length = 0;
-    cJSON_bool has_decimal_point = false;
+    double number = 0;// 初始化变量 number，用于存储解析后的双精度浮点数。
+    unsigned char *after_end = NULL;// 指向 strtod 函数解析结束后的位置，用于检查解析是否成功。
+    unsigned char *number_c_string;// 指向临时字符串缓冲区，用于存储数字字符串
+    unsigned char decimal_point = get_decimal_point();  // 获取当前区域设置的小数点字符（例如 '.' 或 ','）。
+    size_t i = 0;// 循环计数器
+    size_t number_string_length = 0;// 数字字符串的长度。
+    cJSON_bool has_decimal_point = false;// 标志位，表示数字字符串是否包含小数点。
 
-    if ((input_buffer == NULL) || (input_buffer->content == NULL))
+
+    if ((input_buffer == NULL) || (input_buffer->content == NULL)) // 检查输入缓冲区是否有效，如果无效则返回 false。
     {
         return false;
     }
@@ -322,52 +333,52 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
     /* copy the number into a temporary buffer and replace '.' with the decimal point
      * of the current locale (for strtod)
      * This also takes care of '\0' not necessarily being available for marking the end of the input */
-    for (i = 0; can_access_at_index(input_buffer, i); i++)
-    {
-        switch (buffer_at_offset(input_buffer)[i])
+    for (i = 0; can_access_at_index(input_buffer, i); i++)// 循环遍历缓冲区中的字符，直到无法访问为止。
+    { 
+        switch (buffer_at_offset(input_buffer)[i]) // 根据当前字符进行分支处理。
         {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-            case '+':
-            case '-':
-            case 'e':
-            case 'E':
-                number_string_length++;
+            case '0':// 数字字符 '0'。
+            case '1':// 数字字符 '1'。
+            case '2':// 数字字符 '2'。
+            case '3':// 数字字符 '3'。
+            case '4':// 数字字符 '4'。
+            case '5':// 数字字符 '5'。
+            case '6':// 数字字符 '6'。
+            case '7':// 数字字符 '7'。
+            case '8':// 数字字符 '8'。
+            case '9':// 数字字符 '9'。
+            case '+':// 数字字符 '+'。
+            case '-':// 数字字符 '-'。
+            case 'e':// 数字字符 'e'。
+            case 'E':// 数字字符 'E'。
+                number_string_length++;// 增加数字字符串长度计数。
                 break;
 
-            case '.':
-                number_string_length++;
-                has_decimal_point = true;
+            case '.':// 小数点 '.'。
+                number_string_length++; // 增加数字字符串长度计数。
+                has_decimal_point = true;// 设置标志位，表示有小数点。
                 break;
 
-            default:
+            default: // 其他字符，结束循环。
                 goto loop_end;
         }
     }
-loop_end:
-    /* malloc for temporary buffer, add 1 for '\0' */
+loop_end: // 循环结束标签。
+    // 注释：为临时缓冲区分配内存，额外加 1 用于 '\0' 终止符。
     number_c_string = (unsigned char *) input_buffer->hooks.allocate(number_string_length + 1);
-    if (number_c_string == NULL)
+    if (number_c_string == NULL)// 如果分配失败，返回 false。
     {
         return false; /* allocation failure */
     }
 
-    memcpy(number_c_string, buffer_at_offset(input_buffer), number_string_length);
-    number_c_string[number_string_length] = '\0';
+    memcpy(number_c_string, buffer_at_offset(input_buffer), number_string_length);// 将数字字符串从缓冲区复制到临时缓冲区。
+    number_c_string[number_string_length] = '\0';// 添加字符串终止符。
 
-    if (has_decimal_point)
+    if (has_decimal_point)// 如果有小数点，进行替换。
     {
-        for (i = 0; i < number_string_length; i++)
+        for (i = 0; i < number_string_length; i++) // 遍历临时缓冲区。
         {
-            if (number_c_string[i] == '.')
+            if (number_c_string[i] == '.')// 如果是 '.'，替换为区域小数点。
             {
                 /* replace '.' with the decimal point of the current locale (for strtod) */
                 number_c_string[i] = decimal_point;
@@ -375,36 +386,38 @@ loop_end:
         }
     }
 
-    number = strtod((const char*)number_c_string, (char**)&after_end);
-    if (number_c_string == after_end)
+    number = strtod((const char*)number_c_string, (char**)&after_end);// 使用 strtod 将字符串转换为双精度浮点数。
+    if (number_c_string == after_end)// 如果解析失败（after_end 指向开始位置），释放内存并返回 false。
     {
-        /* free the temporary buffer */
-        input_buffer->hooks.deallocate(number_c_string);
+        
+        input_buffer->hooks.deallocate(number_c_string); // 注释：释放临时缓冲区。
         return false; /* parse_error */
     }
 
-    item->valuedouble = number;
+    item->valuedouble = number; // 将解析后的双精度数存储到 cJSON 对象中。
 
-    /* use saturation in case of overflow */
-    if (number >= INT_MAX)
+
+    // 注释：在溢出情况下使用饱和处理。
+    if (number >= INT_MAX)// 如果数字大于等于 INT_MAX，设置为 INT_MAX。
     {
         item->valueint = INT_MAX;
     }
-    else if (number <= (double)INT_MIN)
+    else if (number <= (double)INT_MIN) // 如果数字小于等于 INT_MIN，设置为 INT_MIN。
     {
         item->valueint = INT_MIN;
     }
-    else
+    else // 否则，将数字转换为 int 并存储。
     {
         item->valueint = (int)number;
     }
 
-    item->type = cJSON_Number;
+    item->type = cJSON_Number;// 设置 cJSON 对象的类型为数字。
 
-    input_buffer->offset += (size_t)(after_end - number_c_string);
+    input_buffer->offset += (size_t)(after_end - number_c_string);// 更新缓冲区偏移量，跳过已解析的部分。
+
     /* free the temporary buffer */
     input_buffer->hooks.deallocate(number_c_string);
-    return true;
+    return true;// 解析成功，返回 true。
 }
 
 /* don't ask me, but the original cJSON_SetNumberValue returns an integer or double */
@@ -562,7 +575,7 @@ static unsigned char* ensure(printbuffer * const p, size_t needed)
         p->hooks.deallocate(p->buffer);
     }
     p->length = newsize;
-    p->buffer = newbuffer;
+    p->buffer = newbuffer;  
 
     return newbuffer + p->offset;
 }
@@ -600,7 +613,7 @@ static cJSON_bool print_number(const cJSON * const item, printbuffer * const out
 
     if (output_buffer == NULL)
     {
-        return false;
+        return false;  
     }
 
     /* This checks for NaN and Infinity */
@@ -657,30 +670,23 @@ static cJSON_bool print_number(const cJSON * const item, printbuffer * const out
     return true;
 }
 
-/*
- * 解析4位十六进制数
- * 该函数从输入的字符串中解析一个4位的十六进制数。
- * 输入字符串应至少包含4个字符，每个字符为0-9、A-F或a-f。
- * 返回解析出的无符号整数值，如果输入无效则返回0。
- */
+/* parse 4 digit hexadecimal number */
 static unsigned parse_hex4(const unsigned char * const input)
 {
-    unsigned int h = 0; // 用于累积解析结果的无符号整数
-    size_t i = 0; // 循环计数器
+    unsigned int h = 0;
+    size_t i = 0;
 
-    // 循环处理输入字符串中的4个十六进制字符
     for (i = 0; i < 4; i++)
     {
         /* parse digit */
-        // 检查字符是否为数字0-9
         if ((input[i] >= '0') && (input[i] <= '9'))
         {
-            h += (unsigned int) input[i] - '0'; // 转换为数字值并累加
+            h += (unsigned int) input[i] - '0';
         }
         // 检查字符是否为大写字母A-F
         else if ((input[i] >= 'A') && (input[i] <= 'F'))
         {
-            h += (unsigned int) 10 + input[i] - 'A'; // 转换为10-15并累加
+            h += (unsigned int) 10 + input[i] - 'A';
         }
         // 检查字符是否为小写字母a-f
         else if ((input[i] >= 'a') && (input[i] <= 'f'))
@@ -689,18 +695,17 @@ static unsigned parse_hex4(const unsigned char * const input)
         }
         else /* invalid */
         {
-            return 0; // 如果字符无效，返回0表示解析失败
+            return 0;
         }
 
-        // 如果不是最后一个字符，向左移位4位为下一个字符腾出空间
         if (i < 3)
         {
             /* shift left to make place for the next nibble */
-            h = h << 4; // 左移4位，相当于乘以16
+            h = h << 4;
         }
     }
 
-    return h; // 返回解析出的十六进制数值
+    return h;
 }
 
 /* converts a UTF-16 literal to UTF-8
