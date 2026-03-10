@@ -122,6 +122,25 @@ typedef struct cJSON
     char *string;
 } cJSON;
 
+typedef struct {
+    const char *indent_char; // 缩进字符（如 "  " 或 "\t"）
+    int indent_step;         // 缩进步数（如 2 个空格/1 个制表符）
+    const char *newline_char;// 换行符（如 "\n" 或 "\r\n"）
+    int add_blank_line;      // 是否在对象/数组间添加空行（0=否，1=是）
+    int align_key;           // 是否对齐对象的键名（0=否，1=是）
+    int max_key_width;       // 键名最大宽度（仅 align_key=1 时生效）
+} cJSON_PrintConfig;
+
+// 定义默认配置（方便用户使用）
+#define CJSON_PRINT_CONFIG_DEFAULT { \
+    .indent_char=" ",\
+    .indent_step=4,\
+    .newline_char="\n",\
+    .add_blank_line=0,\
+    .align_key=0,\
+    .max_key_width=0\
+}
+
 typedef struct cJSON_Hooks
 {
       /* malloc/free are CDECL on Windows regardless of the default calling convention of the compiler, so ensure the hooks allow passing those functions directly. */
