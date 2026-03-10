@@ -1044,7 +1044,8 @@ static cJSON_bool print_string_ptr(const unsigned char * const input, printbuffe
         output[0] = '\"';
         memcpy(output + 1, input, output_length);
         output[output_length + 1] = '\"';
-        output[output_length + 2] = '\0';
+
+        output_buffer->offset += output_length + 2;
 
         return true;
     }
@@ -1094,8 +1095,9 @@ static cJSON_bool print_string_ptr(const unsigned char * const input, printbuffe
             }
         }
     }
-    output[output_length + 1] = '\"';
-    output[output_length + 2] = '\0';
+    *output_pointer++ = '\"';
+
+    output_buffer->offset += (size_t)(output_pointer - output);
 
     return true;
 }
@@ -3511,14 +3513,6 @@ static int print_newline_custom(printbuffer *buffer,const cJSON_PrintConfig *con
         }
     }
 
-    //如果开启空行，额外加一个换行
-    if(config->add_blank_line) {
-        for(int i=0;config->newline_char[i]!='\0';i++) {
-          if(!buffer_add_char(buffer,config->newline_char[i])) {
-              return 0;
-            }
-        }
-    }
     return 1;
 }
 //计算对象键名最大宽度
@@ -3536,8 +3530,8 @@ static int calculate_max_key_width(const cJSON * const object)
     while(child!=NULL) {
         //仅处理有键名的节点
         if(child->string!=NULL) {
-            //计算当前键名的字符长度
-            int current_key_len=strlen(child->string);
+            //计算当前键名的字符长度（包括引号）
+            int current_key_len=strlen(child->string) + 2;
             //更新最大宽度
             if(current_key_len>max_width) {
                 max_width=current_key_len;
@@ -3620,12 +3614,12 @@ static int print_object_custom(const cJSON*item,printbuffer*p,const cJSON_PrintC
         if (!ret) return 0;
 
         // 写入键名（带引号）
-        ret = print_string_ptr(child->string, p); // 原生打印字符串函数
+        ret = print_string_ptr((unsigned char*)child->string, p); // 原生打印字符串函数
         if (!ret) return 0;
 
         // 键名对齐：补充空格至最大宽度
         if (config->align_key && child->string != NULL) {
-            int key_len = strlen(child->string);
+            int key_len = strlen(child->string) + 2;
             int pad_len = max_key_width - key_len;
             for (int i = 0; i < pad_len; i++) {
                 ret = buffer_add_char(p, ' ');
@@ -3650,6 +3644,10 @@ static int print_object_custom(const cJSON*item,printbuffer*p,const cJSON_PrintC
             if (!ret) return 0;
             ret = print_newline_custom(p, config);
             if (!ret) return 0;
+            if (config->add_blank_line) {
+                ret = print_newline_custom(p, config);
+                if (!ret) return 0;
+            }
         }
     }
 
