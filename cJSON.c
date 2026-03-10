@@ -3453,6 +3453,31 @@ CJSON_PUBLIC(void) cJSON_free(void *object)
 }
 
 /*----------扩展功能函数编写实现----------*/
+//添加轻量化的字符添加函数，支持自动扩容
+static int buffer_add_char(printbuffer *p, char c)
+{
+    // 1. 入参合法性校验
+    if (p == NULL || p->buffer == NULL) {
+        return 0;
+    }
+
+    // 2. 检查缓冲区是否已满，需要扩容（复用cJSON原生扩容逻辑）
+    if (p->offset >= p->length) {
+        // 扩容规则：每次扩展2倍，最小扩展1024字节（cJSON原生扩容策略）
+        size_t new_length = (p->length == 0) ? 1024 : p->length * 2;
+        char *new_buffer = (char*)realloc(p->buffer, new_length);
+        if (new_buffer == NULL) {
+            return 0; // 扩容失败
+        }
+        // 更新缓冲区指针和长度
+        p->buffer = new_buffer;
+        p->length = new_length;
+    }
+
+    // 3. 写入字符并更新偏移量
+    p->buffer[p->offset++] = c;
+    return 1;
+}
 
 //生成指定层级的缩进字符串，写入打印缓冲区
 static int print_indent_custom(printbuffer *buffer,const cJSON_PrintConfig*config,int depth)
@@ -3583,4 +3608,68 @@ static int print_value_custom(const cJSON*item,printbuffer*p,const cJSON_PrintCo
         default:
             return 0;
     }
+}
+//改造print_object()函数，增加config参数，支持自定义打印配置
+static int print_object_custom(const cJSON*item,printbuffer*p,const cJSON_PrintConfig *config,int depth)
+{
+    int ret = 0;
+    const cJSON *child = item->child;
+    // 计算键名最大宽度（仅对齐时）
+    int max_key_width = (config->align_key) ? calculate_max_key_width(item) : 0;
+
+    // 写入 { + 换行 + 缩进
+    ret = buffer_add_char(p, '{');
+    if (!ret) return 0;
+    ret = print_newline_custom(p, config); // 自定义换行
+    if (!ret) return 0;
+
+    while (child != NULL)
+    {
+        // 写入当前层级缩进
+        ret = print_indent_custom(p, config, depth + 1);
+        if (!ret) return 0;
+
+        // 写入键名（带引号）
+        ret = print_string_ptr(child->string, p); // 原生打印字符串函数
+        if (!ret) return 0;
+
+        // 键名对齐：补充空格至最大宽度
+        if (config->align_key && child->string != NULL) {
+            int key_len = strlen(child->string);
+            int pad_len = max_key_width - key_len;
+            for (int i = 0; i < pad_len; i++) {
+                ret = buffer_add_char(p, ' ');
+                if (!ret) return 0;
+            }
+        }
+
+        // 写入冒号 + 空格（美化：冒号后加一个空格）
+        ret = buffer_add_char(p, ':');
+        if (!ret) return 0;
+        ret = buffer_add_char(p, ' '); // 冒号后加空格，提升可读性
+        if (!ret) return 0;
+
+        // 递归打印值
+        ret = print_value_custom(child, p, config, depth + 1);
+        if (!ret) return 0;
+
+        child = child->next;
+        if (child != NULL) {
+            // 写入逗号 + 换行
+            ret = buffer_add_char(p, ',');
+            if (!ret) return 0;
+            ret = print_newline_custom(p, config);
+            if (!ret) return 0;
+        }
+    }
+
+    // 写入换行 + 缩进 + }
+    ret = print_newline_custom(p, config);
+    if (!ret) return 0;
+    ret = print_indent_custom(p, config, depth);
+    if (!ret) return 0;
+    ret = buffer_add_char(p, '}');
+    if (!ret) return 0;
+
+    return 1;
 }
