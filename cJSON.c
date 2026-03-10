@@ -3722,11 +3722,11 @@ static int print_value_custom(const cJSON*item,printbuffer*p,const cJSON_PrintCo
         case cJSON_Number:
             return print_number(item,p);
         case cJSON_True:
-            return print_true(p,"true");
+            return print_true(p);
         case cJSON_False:
-            return print_false(p,"false");
+            return print_false(p);
         case cJSON_NULL:
-            return print_null(p,"null");
+            return print_null(p);
         default:
             return 0;
     }
