@@ -1986,105 +1986,138 @@ fail:
     return false;
 }
 
-/* Render an object to text. */
+//打印cJSON对象到输出缓冲区的函数，返回操作是否成功
+//参数：item：要打印的cJSON对象；output_buffer：用于存储输出的缓冲区
 static cJSON_bool print_object(const cJSON * const item, printbuffer * const output_buffer)
 {
+    //输出缓冲区的字符指针，用于逐字符写入数据
     unsigned char *output_pointer = NULL;
+    //记录需要分配的缓冲区长度
     size_t length = 0;
+    //指向当前对象的第一个字节顶，即第一个键值对
     cJSON *current_item = item->child;
 
+    //检查：输出缓冲区为空则失败
     if (output_buffer == NULL)
     {
         return false;
     }
 
     /* Compose the output: */
+    //格式化模式时，需要”{\\n",非格式化时，只需“{”一个字符
     length = (size_t) (output_buffer->format ? 2 : 1); /* fmt: {\n */
+    //保证缓冲区空间充足，+1是为了预留出“\0"结束符的位置
     output_pointer = ensure(output_buffer, length + 1);
+    //缓冲区分配失败则返回false
     if (output_pointer == NULL)
     {
         return false;
     }
-
+    //写入对象起始符，格式化时为“{\n”，非格式化时为“{”
     *output_pointer++ = '{';
+    //指针后移，准备写入下一个字符
     output_buffer->depth++;
+    //格式化模式：写入换行符并指针后移
     if (output_buffer->format)
     {
         *output_pointer++ = '\n';
     }
+    //更新缓冲区字符数
     output_buffer->offset += length;
 
+    //遍历所有子节点
     while (current_item)
     {
+        //格式化模式：
         if (output_buffer->format)
         {
             size_t i;
+            //确保缓冲区有足够空间写入缩进字符
             output_pointer = ensure(output_buffer, output_buffer->depth);
             if (output_pointer == NULL)
             {
                 return false;
             }
+            //写入制表符
             for (i = 0; i < output_buffer->depth; i++)
             {
                 *output_pointer++ = '\t';
             }
+            //更新写入的字符数
             output_buffer->offset += output_buffer->depth;
         }
 
         /* print key */
+        //打印当前节点的键名到输出缓冲区
         if (!print_string_ptr((unsigned char*)current_item->string, output_buffer))
         {
             return false;
         }
+        //更新写入字符数
         update_offset(output_buffer);
-
+        
+        //格式化模式时，需要”{\\n",非格式化时，只需“{”一个字符
         length = (size_t) (output_buffer->format ? 2 : 1);
+        //确保缓冲区有足够空间写入冒号和可能的制表符
         output_pointer = ensure(output_buffer, length);
         if (output_pointer == NULL)
         {
             return false;
         }
+        //写入冒号
         *output_pointer++ = ':';
+        //格式化模式下，加一个制表符
         if (output_buffer->format)
         {
             *output_pointer++ = '\t';
         }
+        //更新写入的字符数
         output_buffer->offset += length;
 
         /* print value */
+        //打印值
         if (!print_value(current_item, output_buffer))
         {
             return false;
         }
+        //更新写入的字符数
         update_offset(output_buffer);
 
         /* print comma if not last */
+        //计算长度：如果格式化模式，则为逗号+换行，否则仅逗号
         length = ((size_t)(output_buffer->format ? 1 : 0) + (size_t)(current_item->next ? 1 : 0));
+        //确保空间足够写入逗号和换行符
         output_pointer = ensure(output_buffer, length + 1);
         if (output_pointer == NULL)
         {
             return false;
         }
+        //不是最后一个结点则写入逗号
         if (current_item->next)
         {
             *output_pointer++ = ',';
         }
-
+        //格式化模式下写入换行符
         if (output_buffer->format)
         {
             *output_pointer++ = '\n';
         }
+        //写入结束符
         *output_pointer = '\0';
+        //更新写入的字符数
         output_buffer->offset += length;
-
+        //指向下一个子节点
         current_item = current_item->next;
     }
-
+    
+    //确保缓冲区有足够空间写入对象结束符和结束符
     output_pointer = ensure(output_buffer, output_buffer->format ? (output_buffer->depth + 1) : 2);
+    //格式化模式：写入符
     if (output_pointer == NULL)
     {
         return false;
     }
+    //格式化模式：写入制表符
     if (output_buffer->format)
     {
         size_t i;
@@ -2093,10 +2126,14 @@ static cJSON_bool print_object(const cJSON * const item, printbuffer * const out
             *output_pointer++ = '\t';
         }
     }
+    //写入对象结束符
     *output_pointer++ = '}';
+    //写入字符串结束符
     *output_pointer = '\0';
+    //减少深度
     output_buffer->depth--;
-
+    
+    //所有操作完成，返回true表示成功
     return true;
 }
 
