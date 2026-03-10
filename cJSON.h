@@ -144,6 +144,7 @@ typedef struct {
 char *cJSON_PrintWithConfig(const cJSON *item, const cJSON_PrintConfig *config);
 //快速使用默认美化设置的接口
 char *cJSON_PrintPretty(const cJSON *item);
+
 typedef struct cJSON_Hooks
 {
       /* malloc/free are CDECL on Windows regardless of the default calling convention of the compiler, so ensure the hooks allow passing those functions directly. */

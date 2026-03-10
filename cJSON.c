@@ -3732,3 +3732,88 @@ static int print_value_custom(const cJSON*item,printbuffer*p,const cJSON_PrintCo
     }
 }
 
+static int printbuffer_init(printbuffer *p)
+{
+    // 1. 入参合法性校验
+    if (p == NULL) {
+        return 0;
+    }
+
+    // 2. 初始化缓冲区字段（清空脏数据）
+    memset(p, 0, sizeof(printbuffer));
+
+    // 3. 分配初始内存（cJSON原生默认初始长度1024字节）
+    size_t init_length = 1024;
+    p->buffer = (unsigned char*)global_hooks.allocate(init_length);
+    if (p->buffer == NULL) {
+        return 0; // 内存分配失败
+    }
+
+    // 4. 设置缓冲区初始属性
+    p->length = init_length; // 总长度
+    p->offset = 0;           // 初始偏移量（无数据写入）
+    p->depth = 0;            // 初始深度
+    p->noalloc = false;      // 允许重新分配
+    p->format = true;        // 默认格式化
+    p->hooks = global_hooks; // 使用全局钩子
+
+    return 1;
+}
+
+static void printbuffer_free(printbuffer *p)
+{
+    // 1. 空指针校验（防御性编程）
+    if (p == NULL) {
+        return;
+    }
+
+    // 2. 释放缓冲区动态内存（核心）
+    if (p->buffer != NULL) {
+        p->hooks.deallocate(p->buffer);
+        p->buffer = NULL; // 置空避免野指针
+    }
+
+    // 3. 重置缓冲区字段（可选，增强安全性）
+    p->length = 0;
+    p->offset = 0;
+}
+//自定义配置打印入口
+char *cJSON_PrintWithConfig(const cJSON *item, const cJSON_PrintConfig *config)
+{
+    printbuffer p = {0};
+    char *out = NULL;
+
+    if (item == NULL || config == NULL) {
+        return NULL;
+    }
+
+    // 初始化打印缓冲区（原生逻辑复用）
+    if (!printbuffer_init(&p)) {
+        return NULL;
+    }
+
+    // 调用自定义递归打印函数
+    if (!print_value_custom(item, &p, config, 0)) {
+        printbuffer_free(&p);
+        return NULL;
+    }
+
+    // 拷贝缓冲区到输出字符串（原生逻辑复用）
+    out = (char*)malloc(p.offset + 1);
+    if (out == NULL) {
+        printbuffer_free(&p);
+        return NULL;
+    }
+    memcpy(out, p.buffer, p.offset);
+    out[p.offset] = '\0';
+
+    printbuffer_free(&p);
+    return out;
+}
+
+// 快速美化打印（默认配置）
+char *cJSON_PrintPretty(const cJSON *item)
+{
+    cJSON_PrintConfig config = CJSON_PRINT_CONFIG_DEFAULT;
+    return cJSON_PrintWithConfig(item, &config);
+}
