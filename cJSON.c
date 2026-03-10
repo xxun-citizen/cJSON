@@ -1469,7 +1469,7 @@ static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buf
 }
 
 /* Render a value to text. */
-/* 将 cJSON 值渲染为文本的函数，根据 item 的类型调用相应的打印函数 */
+/* 将 cJSON 值输出为文本的函数，根据 item 的类型调用相应的打印函数 */
 static cJSON_bool print_value(const cJSON * const item, printbuffer * const output_buffer)
 {
     /* 初始化输出指针 */
@@ -1586,7 +1586,7 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
 }
 
 /* Build an array from input text. */
-/* 从输入文本构建数组的函数，解析 JSON 数组并填充到 item 中 */
+/* 从输入文本解析数组的函数，解析 JSON 数组并填充到 item 中 */
 static cJSON_bool parse_array(cJSON * const item, parse_buffer * const input_buffer)
 {
     /* 初始化链表头指针 */
@@ -1723,7 +1723,7 @@ fail:
 }
 
 /* Render an array to text */
-/* 将数组渲染为文本的函数，输出 JSON 数组格式 */
+/* 将数组输出为文本的函数，输出 JSON 数组格式 */
 static cJSON_bool print_array(const cJSON * const item, printbuffer * const output_buffer)
 {
     /* 初始化输出指针 */
@@ -3517,4 +3517,65 @@ static int calculate_max_key_width(const cJSON * const object)
     }
     //返回最大宽度
     return max_width;
+}
+
+/*-----------改造主要函数-----------*/
+//向缓冲区写入”true"
+static int print_true(printbuffer *p)
+{
+    // 检查缓冲区有效性
+    if (p == NULL) {
+        return 0;
+    }
+    // 向缓冲区写入 "true"（长度4，含终止符）
+    const char *true_str = "true";
+    size_t len = strlen(true_str);
+    // 调用cJSON原生的缓冲区添加函数（核心：自动扩容）
+    return (buffer_add(p, true_str, len) == 0) ? 0 : 1;
+}
+//向缓冲区写入”false"
+static int print_false(printbuffer *p)
+{
+    if (p == NULL) {
+        return 0;
+    }
+    const char *false_str = "false";
+    size_t len = strlen(false_str);
+    return (buffer_add(p, false_str, len) == 0) ? 0 : 1;
+}
+//向缓冲区写入”null"
+static int print_null(printbuffer *p)
+{
+    if (p == NULL) {
+        return 0;
+    }
+    const char *null_str = "null";
+    size_t len = strlen(null_str);
+    return (buffer_add(p, null_str, len) == 0) ? 0 : 1;
+}
+//改造print_value()函数，增加config参数，支持自定义打印配置
+static int print_value_custom(const cJSON*item,printbuffer*p,const cJSON_PrintConfig*config,int depth)
+{
+    if(item==NULL||p==NULL||config==NULL) {
+        return 0;
+    }
+    switch(item->type) 
+    {
+        case cJSON_Object:
+            return print_object_custom(item,p,config,depth);
+        case cJSON_Array:
+            return print_array_custom(item,p,config,depth);
+        case cJSON_String:
+            return print_string(item,p);
+        case cJSON_Number:
+            return print_number(item,p);
+        case cJSON_True:
+            return print_true(p,"true");
+        case cJSON_False:
+            return print_false(p,"false");
+        case cJSON_NULL:
+            return print_null(p,"null");
+        default:
+            return 0;
+    }
 }
