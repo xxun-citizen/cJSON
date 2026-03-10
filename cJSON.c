@@ -1113,6 +1113,7 @@ static cJSON_bool parse_array(cJSON * const item, parse_buffer * const input_buf
 static cJSON_bool print_array(const cJSON * const item, printbuffer * const output_buffer);
 static cJSON_bool parse_object(cJSON * const item, parse_buffer * const input_buffer);
 static cJSON_bool print_object(const cJSON * const item, printbuffer * const output_buffer);
+static int print_value_custom(const cJSON*item,printbuffer*p,const cJSON_PrintConfig*config,int depth);
 
 /* Utility to jump whitespace and cr/lf */
 static parse_buffer *buffer_skip_whitespace(parse_buffer * const buffer)
@@ -3560,8 +3561,13 @@ static int print_true(printbuffer *p)
     // 向缓冲区写入 "true"（长度4，含终止符）
     const char *true_str = "true";
     size_t len = strlen(true_str);
-    // 调用cJSON原生的缓冲区添加函数（核心：自动扩容）
-    return (buffer_add(p, true_str, len) == 0) ? 0 : 1;
+    // 调用cJSON的缓冲区添加函数（核心：自动扩容）
+    for (size_t i = 0; i < len; i++) {
+        if (!buffer_add_char(p, true_str[i])) {
+            return 0;
+        }
+    }
+    return 1;
 }
 //向缓冲区写入”false"
 static int print_false(printbuffer *p)
@@ -3571,7 +3577,12 @@ static int print_false(printbuffer *p)
     }
     const char *false_str = "false";
     size_t len = strlen(false_str);
-    return (buffer_add(p, false_str, len) == 0) ? 0 : 1;
+    for (size_t i = 0; i < len; i++) {
+        if (!buffer_add_char(p, false_str[i])) {
+            return 0;
+        }
+    }
+    return 1;
 }
 //向缓冲区写入”null"
 static int print_null(printbuffer *p)
@@ -3581,33 +3592,12 @@ static int print_null(printbuffer *p)
     }
     const char *null_str = "null";
     size_t len = strlen(null_str);
-    return (buffer_add(p, null_str, len) == 0) ? 0 : 1;
-}
-//改造print_value()函数，增加config参数，支持自定义打印配置
-static int print_value_custom(const cJSON*item,printbuffer*p,const cJSON_PrintConfig*config,int depth)
-{
-    if(item==NULL||p==NULL||config==NULL) {
-        return 0;
-    }
-    switch(item->type) 
-    {
-        case cJSON_Object:
-            return print_object_custom(item,p,config,depth);
-        case cJSON_Array:
-            return print_array_custom(item,p,config,depth);
-        case cJSON_String:
-            return print_string(item,p);
-        case cJSON_Number:
-            return print_number(item,p);
-        case cJSON_True:
-            return print_true(p,"true");
-        case cJSON_False:
-            return print_false(p,"false");
-        case cJSON_NULL:
-            return print_null(p,"null");
-        default:
+    for (size_t i = 0; i < len; i++) {
+        if (!buffer_add_char(p, null_str[i])) {
             return 0;
+        }
     }
+    return 1;
 }
 //改造print_object()函数，增加config参数，支持自定义打印配置
 static int print_object_custom(const cJSON*item,printbuffer*p,const cJSON_PrintConfig *config,int depth)
@@ -3673,3 +3663,72 @@ static int print_object_custom(const cJSON*item,printbuffer*p,const cJSON_PrintC
 
     return 1;
 }
+//改造print_array()函数，增加config参数，支持自定义打印配置
+static int print_array_custom(const cJSON *item, printbuffer *p, const cJSON_PrintConfig *config, int depth)
+{
+    int ret = 0;
+    const cJSON *child = item->child;
+
+    // 写入 [ + 换行 + 缩进
+    ret = buffer_add_char(p, '[');
+    if (!ret) return 0;
+    ret = print_newline_custom(p, config);
+    if (!ret) return 0;
+
+    while (child != NULL)
+    {
+        // 写入当前层级缩进
+        ret = print_indent_custom(p, config, depth + 1);
+        if (!ret) return 0;
+
+        // 递归打印数组元素
+        ret = print_value_custom(child, p, config, depth + 1);
+        if (!ret) return 0;
+
+        child = child->next;
+        if (child != NULL) {
+            // 写入逗号 + 换行
+            ret = buffer_add_char(p, ',');
+            if (!ret) return 0;
+            ret = print_newline_custom(p, config);
+            if (!ret) return 0;
+        }
+    }
+
+    // 写入换行 + 缩进 + ]
+    ret = print_newline_custom(p, config);
+    if (!ret) return 0;
+    ret = print_indent_custom(p, config, depth);
+    if (!ret) return 0;
+    ret = buffer_add_char(p, ']');
+    if (!ret) return 0;
+
+    return 1;
+}
+//改造print_value()函数，增加config参数，支持自定义打印配置
+static int print_value_custom(const cJSON*item,printbuffer*p,const cJSON_PrintConfig*config,int depth)
+{
+    if(item==NULL||p==NULL||config==NULL) {
+        return 0;
+    }
+    switch(item->type) 
+    {
+        case cJSON_Object:
+            return print_object_custom(item,p,config,depth);
+        case cJSON_Array:
+            return print_array_custom(item,p,config,depth);
+        case cJSON_String:
+            return print_string(item,p);
+        case cJSON_Number:
+            return print_number(item,p);
+        case cJSON_True:
+            return print_true(p,"true");
+        case cJSON_False:
+            return print_false(p,"false");
+        case cJSON_NULL:
+            return print_null(p,"null");
+        default:
+            return 0;
+    }
+}
+
